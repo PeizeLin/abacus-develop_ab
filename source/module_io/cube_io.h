@@ -10,7 +10,7 @@ namespace ModuleIO
 {
 extern bool read_cube(
 #ifdef __MPI
-    const Parallel_Grid*const Pgrid,
+    const Parallel_Grid* const Pgrid, // const pointer to Parallel_Grid instance which is a const
 #endif
     const int my_rank,
     const std::string esolver_type,
@@ -35,7 +35,7 @@ extern void write_cube(
     const int nplane,
     const int startz_current,
 #endif
-    const double*const data,
+    const double* const data,
     const int is,
     const int nspin,
     const int iter,
@@ -44,7 +44,7 @@ extern void write_cube(
     const int ny,
     const int nz,
     const double ef,
-    const UnitCell*const ucell,
+    const UnitCell* const ucell,
     const int precision = 11,
     const int out_fermi = 1); // mohan add 2007-10-17
 
@@ -56,7 +56,7 @@ extern void write_cube(
 extern void read_cube_core_match(
     std::ifstream &ifs,
 #ifdef __MPI
-    const Parallel_Grid*const Pgrid,
+    const Parallel_Grid* const Pgrid,
     const bool flag_read_rank,
 #endif
     double*const data,
