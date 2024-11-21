@@ -79,6 +79,12 @@ TEST_F(InputTest, Item_test)
         EXPECT_EXIT(it->second.check_value(it->second, param), ::testing::ExitedWithCode(0), "");
         output = testing::internal::GetCapturedStdout();
         EXPECT_THAT(output, testing::HasSubstr("NOTICE"));
+
+        param.input.esolver_type = "lr";
+        param.input.calculation = "scf";
+        it = find_label("esolver_type", readinput.input_lists);
+        it->second.reset_value(it->second, param);
+        EXPECT_EQ(param.input.calculation, "nscf");
     }
     { // nspin
         auto it = find_label("nspin", readinput.input_lists);
@@ -928,6 +934,14 @@ TEST_F(InputTest, Item_test2)
         output = testing::internal::GetCapturedStdout();
         EXPECT_THAT(output, testing::HasSubstr("NOTICE"));
 
+        param.input.dm_to_rho = true;
+        param.input.gamma_only = true;
+        GlobalV::NPROC = 1;
+        testing::internal::CaptureStdout();
+        EXPECT_EXIT(it->second.check_value(it->second, param), ::testing::ExitedWithCode(0), "");
+        output = testing::internal::GetCapturedStdout();
+        EXPECT_THAT(output, testing::HasSubstr("NOTICE"));
+
 #ifndef __USECNPY
         param.input.dm_to_rho = true;
         GlobalV::NPROC = 1;
@@ -1434,7 +1448,7 @@ TEST_F(InputTest, Item_test2)
         param.input.onsite_radius = 0.0;
         param.input.dft_plus_u = 1;
         it->second.reset_value(it->second, param);
-        EXPECT_EQ(param.input.onsite_radius, 5.0);
+        EXPECT_EQ(param.input.onsite_radius, 3.0);
     }
     { // hubbard_u
         auto it = find_label("hubbard_u", readinput.input_lists);
@@ -1572,10 +1586,9 @@ TEST_F(InputTest, Item_test2)
         output = testing::internal::GetCapturedStdout();
         EXPECT_THAT(output, testing::HasSubstr("NOTICE"));
     }
-    { // sc_file
-        auto it = find_label("sc_file", readinput.input_lists);
-        param.input.sc_file = "notexist";
-        param.input.sc_mag_switch = true;
+    { // sc_scf_thr
+        auto it = find_label("sc_scf_thr", readinput.input_lists);
+        param.input.sc_scf_thr = -1e-3;
         testing::internal::CaptureStdout();
         EXPECT_EXIT(it->second.check_value(it->second, param), ::testing::ExitedWithCode(0), "");
         output = testing::internal::GetCapturedStdout();

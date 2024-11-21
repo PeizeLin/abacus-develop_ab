@@ -1,9 +1,9 @@
 #include "hsolver_pw_sdft.h"
 
 #include "module_base/global_function.h"
+#include "module_base/parallel_device.h"
 #include "module_base/timer.h"
 #include "module_base/tool_title.h"
-#include "module_base/parallel_device.h"
 #include "module_elecstate/module_charge/symmetry_rho.h"
 
 #include <algorithm>
@@ -28,6 +28,30 @@ void HSolverPW_SDFT<T, Device>::solve(hamilt::Hamilt<T, Device>* pHamilt,
     const int nbands = psi.get_nbands();
     const int nks = psi.get_nk();
 
+    //---------------------------------------------------------------------------------------------------------------
+    //---------------------------------for psi init guess!!!!--------------------------------------------------------
+    //---------------------------------------------------------------------------------------------------------------
+    // if (!PARAM.inp.psi_initializer && !this->initialed_psi && this->basis_type == "pw")
+    // {
+    //     for (int ik = 0; ik < nks; ++ik)
+    //     {
+    //         /// update H(k) for each k point
+    //         pHamilt->updateHk(ik);
+
+    //         if (nbands > 0 && GlobalV::MY_STOGROUP == 0)
+    //         {
+    //             /// update psi pointer for each k point
+    //             psi.fix_k(ik);
+
+    //             /// for psi init guess!!!!
+    //             hamilt::diago_PAO_in_pw_k2(this->ctx, ik, psi, this->wfc_basis, this->pwf, pHamilt);
+    //         }
+    //     }
+    // }
+    //---------------------------------------------------------------------------------------------------------------
+    //---------------------------------------------------------------------------------------------------------------
+    //---------------------------------------------------------------------------------------------------------------
+
     // prepare for the precondition of diagonalization
     std::vector<double> precondition(psi.get_nbasis(), 0.0);
 
@@ -41,11 +65,13 @@ void HSolverPW_SDFT<T, Device>::solve(hamilt::Hamilt<T, Device>* pHamilt,
     // part of KSDFT to get KS orbitals
     for (int ik = 0; ik < nks; ++ik)
     {
+        ModuleBase::timer::tick("HSolverPW_SDFT", "solve_KS");
         pHamilt->updateHk(ik);
         if (nbands > 0 && GlobalV::MY_STOGROUP == 0)
         {
-            this->updatePsiK(pHamilt, psi, ik);
-            // template add precondition calculating here
+            /// update psi pointer for each k point
+            psi.fix_k(ik);
+            /// template add precondition calculating here
             this->update_precondition(precondition, ik, this->wfc_basis->npwk[ik], pes->pot->get_vl_of_0());
             /// solve eigenvector and eigenvalue for H(k)
             double* p_eigenvalues = &(pes->ekb(ik, 0));
@@ -55,10 +81,11 @@ void HSolverPW_SDFT<T, Device>::solve(hamilt::Hamilt<T, Device>* pHamilt,
 #ifdef __MPI
         if (nbands > 0 && PARAM.inp.bndpar > 1)
         {
-            Parallel_Common::bcast_complex(this->ctx, &psi(ik, 0, 0), npwx * nbands, PARAPW_WORLD, &psi_cpu(ik, 0, 0));
+            Parallel_Common::bcast_dev(this->ctx, &psi(ik, 0, 0), npwx * nbands, PARAPW_WORLD, &psi_cpu(ik, 0, 0));
             MPI_Bcast(&pes->ekb(ik, 0), nbands, MPI_DOUBLE, 0, PARAPW_WORLD);
         }
 #endif
+        ModuleBase::timer::tick("HSolverPW_SDFT", "solve_KS");
         stoiter.orthog(ik, psi, stowf);
         stoiter.checkemm(ik, istep, iter, stowf); // check and reset emax & emin
     }
@@ -80,6 +107,12 @@ void HSolverPW_SDFT<T, Device>::solve(hamilt::Hamilt<T, Device>* pHamilt,
 
     // prepare sqrt{f(\hat{H})}|\chi> to calculate density, force and stress
     stoiter.calHsqrtchi(stowf);
+
+    elecstate::ElecStatePW<T, Device>* pes_pw = static_cast<elecstate::ElecStatePW<T, Device>*>(pes);
+    if (GlobalV::MY_STOGROUP == 0)
+    {
+        pes_pw->calEBand();
+    }
     if (skip_charge)
     {
         ModuleBase::timer::tick("HSolverPW_SDFT", "solve");
@@ -87,7 +120,6 @@ void HSolverPW_SDFT<T, Device>::solve(hamilt::Hamilt<T, Device>* pHamilt,
     }
     //(5) calculate new charge density
     // calculate KS rho.
-    elecstate::ElecStatePW<T, Device>* pes_pw = static_cast<elecstate::ElecStatePW<T, Device>*>(pes);
     pes_pw->init_rho_data();
     if (nbands > 0)
     {
@@ -100,7 +132,7 @@ void HSolverPW_SDFT<T, Device>::solve(hamilt::Hamilt<T, Device>* pHamilt,
     {
         for (int is = 0; is < this->nspin; is++)
         {
-            setmem_var_op()(this->ctx, pes_pw->rho[is], 0,  pes_pw->charge->nrxx);
+            setmem_var_op()(this->ctx, pes_pw->rho[is], 0, pes_pw->charge->nrxx);
         }
     }
     // calculate stochastic rho
